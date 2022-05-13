@@ -86,7 +86,7 @@ cache = Cache(app.server, config={
     'CACHE_DEFAULT_TIMEOUT': CACHE_TIMEOUT
 })
 
-@cache.memoize()
+
 def get_data():
 
     sg = Subgrounds()
@@ -141,7 +141,7 @@ def get_data():
 
     return df_bridged, df_retired
 
-@cache.memoize()
+
 def get_data_pool():
 
     sg = Subgrounds()
@@ -171,7 +171,7 @@ def get_data_pool():
 
     return df_deposited, df_redeemed
 
-@cache.memoize()
+
 def get_data_pool_retired():
 
     sg = Subgrounds()
@@ -189,7 +189,7 @@ def get_data_pool_retired():
 
     return df_pool_retired
 
-@cache.memoize()
+
 def get_mco2_data():
     sg = Subgrounds()
 
@@ -240,7 +240,7 @@ def get_mco2_data():
     ])
     return df_bridged, df_bridged_tx, df_retired
 
-@cache.memoize()
+
 def get_verra_data():
     use_fallback_data = False
     if use_fallback_data:
@@ -285,7 +285,7 @@ token_cg_dict = {
     'MCO2': {'address': MCO2_ADDRESS, 'id': 'ethereum', 'Full Name': 'Moss Carbon Credit'},
 }
 
-@cache.memoize()
+
 def get_prices():
     df_prices = pd.DataFrame()
     for i in token_cg_dict.keys():
@@ -302,7 +302,7 @@ def get_prices():
     return df_prices
 
 
-# @cache.memoize()
+@cache.memoize()
 def generate_layout():
     df, df_retired = get_data()
     df_deposited, df_redeemed = get_data_pool()
