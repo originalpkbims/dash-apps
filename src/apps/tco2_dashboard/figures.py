@@ -8,6 +8,10 @@ from .helpers import add_px_figure
 from plotly.subplots import make_subplots
 from .constants import FIGURE_BG_COLOR
 import pandas as pd
+import circlify
+import matplotlib
+from matplotlib import pyplot as plt
+matplotlib.use('agg')
 
 
 def sub_plots_volume(df, last_df, title_indicator, title_graph, zero_evt_text):
@@ -816,3 +820,77 @@ def on_vs_off_project_retired(df_verra_retired, retires_info_dict):
                       margin=dict(t=20, b=20, l=0, r=0))
 
     return fig
+
+# --- homepage figures ---
+
+
+def filter_dataframe_month(df, month):
+    df = df[df == month]
+
+
+def create_offchain_vs_onchain_figs(df_offchain, df_offchain_retired, df_onchain, df_onchain_retired, style_dict):
+
+    x = pd.DataFrame({'Date': pd.date_range(
+        '30/7/2020', end=pd.to_datetime('today'), freq='MS')})
+    x['Date'] = pd.to_datetime(x['Date']).dt.to_period('m')
+    datelist = x['Date'].tolist()
+    # matplotlib.pyplot.switch_backend('Agg')
+    for i in datelist:
+        plt.close('all')
+        offchain = df_offchain[df_offchain['Date'] == i]['Quantity'].sum()
+        offchain_retired = df_offchain_retired[df_offchain_retired['Date'] == i]['Quantity'].sum(
+        )
+        onchain = df_onchain[df_onchain['Date'] == i]['Quantity'].sum()
+        onchain_retired = df_onchain_retired[df_onchain_retired["Date"] == i]['Quantity'].sum(
+        )
+        total = offchain + offchain_retired + onchain + onchain_retired
+        data = [{'id': 'World', 'datum': total, 'children': [
+            {'id': "Offchain", 'datum': offchain},
+            {'id': "Offchain retired", 'datum': offchain_retired},
+        ]}]
+        if onchain > 0:
+            data[0]['children'].append({'id': "Onchain", 'datum': onchain})
+        if onchain_retired > 0:
+            data[0]['children'].append(
+                {'id': "Onchain retired", 'datum': onchain_retired})
+
+        circles = circlify.circlify(
+            data,
+            show_enclosure=False,
+            target_enclosure=circlify.Circle(x=0, y=0, r=1)
+        )
+
+        fig, ax = plt.subplots(figsize=(14, 14), facecolor='#202020')
+
+        # Remove axes
+        ax.axis('off')
+
+        # Find axis boundaries
+        lim = max(
+            max(
+                abs(circle.x) + circle.r,
+                abs(circle.y) + circle.r,
+            )
+            for circle in circles
+        )
+        plt.xlim(-lim, lim)
+        plt.ylim(-lim, lim)
+
+        # Print circles:
+        for circle in circles:
+            if circle.level != 2:
+                continue
+            x, y, r = circle
+            label = circle.ex["id"]
+            ax.add_patch(plt.Circle((x, y), r*style_dict[label]['scale_r'], alpha=style_dict[label]['alpha'],
+                                    linewidth=2, color=style_dict[label]['color']))
+            label_value = str(circle.ex["datum"])
+            plt.annotate(label, (x, y), ha='center', color="white",
+                         fontsize=style_dict[label]['fontsize'], weight='bold')
+            y = y - r*0.15
+            plt.annotate(label_value, (x, y), ha='center', color="white",
+                         fontsize=style_dict[label]['fontsize'], weight='medium')
+
+        plt.savefig(f'src/apps/tco2_dashboard/assets/figures_imgs/offchain_vs_onchain_{str(i)}.png')
+                    # format='svg', dpi=1200)
+    return datelist

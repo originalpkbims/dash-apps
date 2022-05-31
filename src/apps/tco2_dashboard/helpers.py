@@ -269,3 +269,30 @@ def adjust_mco2_bridges(df, df_tx):
                  '0x0000000000000000000000000000000000000000000000000000000000000000', 'Date_new']
     df = df.drop(columns=['Tx Address', 'Date_new'])
     return df
+
+
+def group_data_monthly(i):
+    i = i[['Date', 'Quantity']]
+    i['Date'] = pd.to_datetime(i['Date']).dt.to_period('m')
+    i = i.groupby('Date')['Quantity'].sum().to_frame().reset_index()
+    i = i.sort_values(by='Date', ascending=True)
+    i["Quantity"] = i["Quantity"].cumsum()
+    return i
+
+
+def off_vs_on_data(df_verra, df_verra_retired, bridges_info_dict,
+                   retires_info_dict):
+    bridge_df = pd.concat([i['Dataframe'][['Date', 'Quantity']]
+                          for i in bridges_info_dict.values()])
+    retire_df = pd.concat([i['Dataframe'][['Date', 'Quantity']]
+                          for i in retires_info_dict.values()])
+    df_verra = group_data_monthly(df_verra)
+    bridge_df = group_data_monthly(bridge_df)
+    df_verra_retired = group_data_monthly(df_verra_retired)
+    retire_df = group_data_monthly(retire_df)
+
+    df_verra = df_verra.merge(bridge_df, how='left', left_on='Date',
+                              right_on='Date', suffixes=('', '_onchain')).reset_index(drop=True)
+    df_verra['Quantity_onchain'] = df_verra['Quantity_onchain'].fillna(0)
+    df_verra['Quantity'] = df_verra['Quantity'] - df_verra['Quantity_onchain']
+    return df_verra, df_verra_retired, bridge_df, retire_df

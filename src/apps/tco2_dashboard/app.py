@@ -15,8 +15,10 @@ from pycoingecko import CoinGeckoAPI
 from .figures import sub_plots_vintage, sub_plots_volume, map, total_vintage, total_volume, \
     methodology_volume, project_volume, eligible_pool_pie_chart, pool_pie_chart,\
     historical_prices, bridges_pie_chart, on_vs_off_vintage, on_vs_off_map, on_vs_off_project,\
-    tokenized_volume, on_vs_off_vintage_retired, on_vs_off_map_retired, on_vs_off_project_retired
+    tokenized_volume, on_vs_off_vintage_retired, on_vs_off_map_retired, on_vs_off_project_retired,\
+    create_offchain_vs_onchain_figs
 from .figures_carbon_pool import deposited_over_time, redeemed_over_time, retired_over_time
+from .homepage import create_homepage_content
 from .offchain_vs_onchain import create_offchain_vs_onchain_content
 from .onchain_pool_comp import create_onchain_pool_comp_content
 from .tco2 import create_content_toucan
@@ -26,14 +28,15 @@ from .mco2 import create_content_moss
 from .helpers import date_manipulations, filter_pool_quantity, region_manipulations, \
     subsets, drop_duplicates, filter_carbon_pool, bridge_manipulations, \
     merge_verra, verra_manipulations, mco2_verra_manipulations, \
-    adjust_mco2_bridges, verra_retired, date_manipulations_verra
+    adjust_mco2_bridges, verra_retired, date_manipulations_verra, off_vs_on_data
 from .constants import rename_map, retires_rename_map, deposits_rename_map, \
     redeems_rename_map, pool_retires_rename_map, BCT_ADDRESS, \
     verra_rename_map, merge_columns, MCO2_ADDRESS, verra_columns, \
     VERRA_FALLBACK_NOTE, VERRA_FALLBACK_URL, NCT_ADDRESS, KLIMA_RETIRED_NOTE, UBO_ADDRESS, \
     NBO_ADDRESS, mco2_bridged_rename_map, bridges_rename_map
 
-CACHE_TIMEOUT = 86400
+# CACHE_TIMEOUT = 86400
+CACHE_TIMEOUT = 200000
 CARBON_SUBGRAPH_URL = 'https://api.thegraph.com/subgraphs/name/klimadao/polygon-bridged-carbon'
 CARBON_MOSS_ETH_SUBGRAPH_URL = 'https://api.thegraph.com/subgraphs/name/originalpkbims/ethcarbonsubgraph'
 CARBON_ETH_SUBGRAPH_URL = 'https://api.thegraph.com/subgraphs/name/originalpkbims/ethereum-bridged-carbon'
@@ -87,6 +90,8 @@ cache = Cache(app.server, config={
 })
 
 
+
+@cache.memoize()
 def get_data():
 
     sg = Subgrounds()
@@ -142,6 +147,7 @@ def get_data():
     return df_bridged, df_retired
 
 
+@cache.memoize()
 def get_data_pool():
 
     sg = Subgrounds()
@@ -172,6 +178,7 @@ def get_data_pool():
     return df_deposited, df_redeemed
 
 
+@cache.memoize()
 def get_data_pool_retired():
 
     sg = Subgrounds()
@@ -190,6 +197,7 @@ def get_data_pool_retired():
     return df_pool_retired
 
 
+@cache.memoize()
 def get_mco2_data():
     sg = Subgrounds()
 
@@ -241,6 +249,7 @@ def get_mco2_data():
     return df_bridged, df_bridged_tx, df_retired
 
 
+@cache.memoize()
 def get_verra_data():
     use_fallback_data = False
     if use_fallback_data:
@@ -286,6 +295,7 @@ token_cg_dict = {
 }
 
 
+@cache.memoize()
 def get_prices():
     df_prices = pd.DataFrame()
     for i in token_cg_dict.keys():
@@ -302,7 +312,7 @@ def get_prices():
     return df_prices
 
 
-@cache.memoize()
+# @cache.memoize()
 def generate_layout():
     df, df_retired = get_data()
     df_deposited, df_redeemed = get_data_pool()
@@ -809,6 +819,24 @@ def generate_layout():
         token_cg_dict, df_prices, fig_historical_prices)
     cache.set("content_onchain_pool_comp", content_onchain_pool_comp)
 
+    # --- homepage ---
+    df_offchain, df_offchain_retired, df_onchain, df_onchain_retired = off_vs_on_data(
+        df_verra, df_verra_retired, bridges_info_dict, retires_info_dict)
+
+    style_dict_offchain_vs_onchain = {'Offchain': {'fontsize': 20, 'scale_r': 0.9, 'alpha': 1, 'color': '#0BA1FF'},
+                                      'Offchain retired': {'fontsize': 18, 'scale_r': 0.9, 'alpha': 0.5, 'color': '#0BA1FF'},
+                                      'Onchain': {'fontsize': 16, 'scale_r': 0.9, 'alpha': 1, 'color': '#00CC33'},
+                                      'Onchain retired': {'fontsize': 12, 'scale_r': 0.9, 'alpha': 0.5, 'color': '#00CC33'},
+                                      }
+
+    datelist = create_offchain_vs_onchain_figs(df_offchain, df_offchain_retired,
+                                               df_onchain, df_onchain_retired, style_dict_offchain_vs_onchain)
+
+    datelist, numdate, content_homepage = create_homepage_content(datelist)
+    cache.set("content_homepage", content_homepage)
+    cache.set("numdate", numdate)
+    cache.set("datelist", datelist)
+
     sidebar_toggle = dbc.Row(
         [
             dbc.Col(
@@ -847,9 +875,19 @@ def generate_layout():
                                 'link', className="material-icons"),
                             className='icon-container'),
                         html.Span(
-                            'Off-Chain vs. On-Chain Carbon Market',
+                            'Tokenized Carbon',
                             className='icon-title')
                     ], href="/", active="exact",
+                    ),
+                    dbc.NavLink([
+                        html.Div(
+                            html.Span(
+                                'link', className="material-icons"),
+                            className='icon-container'),
+                        html.Span(
+                            'Off-Chain vs. On-Chain Carbon Market',
+                            className='icon-title')
+                    ], href="/Carbonmarket", active="exact",
                     ),
 
                     dbc.NavLink([
@@ -959,9 +997,20 @@ def generate_layout():
                                         'link', className="material-icons"),
                                     className='icon-container'),
                                 html.Span(
-                                    'Off-Chain vs. On-Chain Carbon Market',
+                                    'Tokenized Carbon',
                                     className='icon-title')
                             ], href="/", active="exact",
+                                id="button-homepage", n_clicks=0,
+                            ),
+                            dbc.NavLink([
+                                html.Div(
+                                    html.Span(
+                                        'link', className="material-icons"),
+                                    className='icon-container'),
+                                html.Span(
+                                    'Off-Chain vs. On-Chain Carbon Market',
+                                    className='icon-title')
+                            ], href="/Carbonmarket", active="exact",
                                 id="button-off_vs_on_chain", n_clicks=0,
                             ),
 
@@ -1227,9 +1276,23 @@ def update_eligible_pie_chart(pool_key):
     return fig_eligible_pool_pie_chart
 
 
+@callback(
+    Output('output', 'children'),
+    Input('year-slider', 'value'))
+def update_output(value):
+    datelist = cache.get('datelist')
+    print(f'figures_imgs/offchain_vs_onchain_{datelist[value]}.svg')
+    return [html.H1(datelist[value]), html.Img(src='assets/figures_imgs/offchain_vs_onchain_2020-08.png',
+                                               style={'height': '400px', 'width': '600px%'})]
+
+
 @app.callback(Output("page-content", "children"), [Input("url", "pathname")])
 def render_page_content(pathname):
     if pathname == "/":
+        print('AAAAAAA')
+        content_homepage = cache.get("content_homepage")
+        return content_homepage
+    elif pathname == "/Carbonmarket":
         content_offchain_vs_onchain = cache.get("content_offchain_vs_onchain")
         return content_offchain_vs_onchain
 
@@ -1278,6 +1341,7 @@ def render_page_content(pathname):
 @app.callback(
     Output("collapse", "is_open"),
     [Input("toggle", "n_clicks"),
+     Input("button-homepage", "n_clicks"),
      Input("button-off_vs_on_chain", "n_clicks"),
      Input("button-onchain_pool_comp", "n_clicks"),
      Input("button-tco2", "n_clicks"),
@@ -1289,9 +1353,9 @@ def render_page_content(pathname):
      Input("button-nbo", "n_clicks"), ],
     [State("collapse", "is_open")],
 )
-def toggle_collapse(n, n_off_vs_on, n_all_carbon_pools, n_tco2, n_bct, n_nct, n_mco2, n_c3t,
+def toggle_collapse(n, n_homepage, n_off_vs_on, n_all_carbon_pools, n_tco2, n_bct, n_nct, n_mco2, n_c3t,
                     n_ubo, n_nbo, is_open):
-    if n or n_off_vs_on or n_all_carbon_pools or n_tco2 or n_bct or n_nct or n_mco2 or n_c3t or \
+    if n or n_homepage or n_off_vs_on or n_all_carbon_pools or n_tco2 or n_bct or n_nct or n_mco2 or n_c3t or \
             n_ubo or n_nbo:
         return not is_open
     return is_open
